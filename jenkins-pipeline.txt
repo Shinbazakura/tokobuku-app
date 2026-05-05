@@ -1,0 +1,36 @@
+Groovy
+pipeline {
+    agent any
+    environment {
+        DOCKER_USER = "budisarah" 
+        GIT_REPO_URL = "GANTI_URL_GITHUB_KAMU.git"
+    }
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main', url: "${GIT_REPO_URL}"
+            }
+        }
+        stage('Build & Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-login', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                    sh "docker build -t ${USER}/kantin-backend:latest ./backend"
+                    sh "docker build -t ${USER}/kantin-frontend:latest ./frontend"
+                    
+                    sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
+                    sh "docker push ${USER}/kantin-backend:latest"
+                    sh "docker push ${USER}/kantin-frontend:latest"
+                }
+            }
+        }
+        stage('Deploy ke Azure AKS') {
+            steps {
+                withKubeConfig([credentialsId: 'aks-config']) {
+                    sh "kubectl apply -f kantin-k8s.yaml"
+                    sh "kubectl rollout restart deployment backend-kantin"
+                    sh "kubectl rollout restart deployment frontend-kantin"
+                }
+            }
+        }
+    }
+}
